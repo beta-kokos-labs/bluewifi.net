@@ -26,7 +26,7 @@ characteristic = service.addCharacteristic(CHARACTERISTIC_UUID,
                                             Characteristic.PERM_WRITE)
 
 # Set a custom name
-peripheral.setName("MyCustomBLEServer")
+peripheral.setName("BlueWifiNetwork4u&uagain")
 
 # Start advertising
 peripheral.advertiseService(SERVICE_UUID)
@@ -53,7 +53,7 @@ async def run_client():
     print("Scanning for devices...")
     devices = await BleakScanner.discover()
     for device in devices:
-        if device.name == "MyCustomBLEServer":
+        if device.name == "BlueWifiNetwork4u&uagain":
             print(f"Found device: {device.name} with address: {device.address}")
             async with BleakClient(device) as client:
                 print(f"Connected: {client.is_connected}")
