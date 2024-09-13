@@ -1,134 +1,76 @@
-!python3 -m pip install pybluez
+!pip install bluepy
+from bluepy.btle import Peripheral, UUID, Service, Characteristic
+from bluepy.btle import DefaultDelegate
 
-import bluetooth
+# Define UUIDs
+SERVICE_UUID = UUID("12345678-1234-5678-1234-56789abcdef0")
+CHARACTERISTIC_UUID = UUID("abcdef01-2345-6789-abcd-ef0123456789")
 
-# Create a Bluetooth socket
-server_sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+class MyDelegate(DefaultDelegate):
+    def __init__(self, periph):
+        DefaultDelegate.__init__(self)
+        self.peripheral = periph
 
-# Bind the socket to a port
-server_sock.bind(("", bluetooth.PORT_ANY))
+    def handleNotification(self, cHandle, data):
+        print("Received notification:", data.decode('utf-8'))
 
-# Start listening for connections
-server_sock.listen(1)
+# Create a BLE Peripheral
+peripheral = Peripheral()
 
-# Get the port that the server is listening on
-port = server_sock.getsockname()[1]
+# Add service and characteristic
+service = peripheral.addService(SERVICE_UUID, True)
+characteristic = service.addCharacteristic(CHARACTERISTIC_UUID, 
+                                            Characteristic.PROP_READ | 
+                                            Characteristic.PROP_WRITE, 
+                                            Characteristic.PERM_READ | 
+                                            Characteristic.PERM_WRITE)
 
-# Advertise the service
-service_id = "00001101-0000-1000-8000-00805F9B34FB"  # UUID for Serial Port Profile (SPP)
-service_name = "blue-wifi-networks"
-service_classes = [service_id, bluetooth.SERIAL_PORT_CLASS]
-profiles = [bluetooth.SERIAL_PORT_PROFILE]
+# Set a custom name
+peripheral.setName("MyCustomBLEServer")
 
-bluetooth.advertise_service(
-    server_sock,
-    service_name,
-    service_id,
-    service_classes,
-    profiles
-)
+# Start advertising
+peripheral.advertiseService(SERVICE_UUID)
 
-print(f"Waiting for connection on RFCOMM channel {port}")
+print("Advertising as 'MyCustomBLEServer'...")
 
-# Accept a connection
-client_sock, client_info = server_sock.accept()
-print("Accepted connection from", client_info)
-
+# Run the server
 try:
     while True:
-        data = client_sock.recv(1024)
-        if not data:
-            break
-        print("Received:", data.decode('utf-8'))
+        if peripheral.waitForNotifications(1.0):
+            # Handle notifications
+            continue
+        print("Waiting for notifications...")
 finally:
-    client_sock.close()
-    server_sock.close()
+    peripheral.disconnect()
+    print("Disconnected.")
 
-#############################################################
+##################################
+!pip install bleak
+import asyncio
+from bleak import BleakScanner, BleakClient
 
-bluetooth.BluetoothSocket(bluetooth.RFCOMM)
+async def run_client():
+    print("Scanning for devices...")
+    devices = await BleakScanner.discover()
+    for device in devices:
+        if device.name == "MyCustomBLEServer":
+            print(f"Found device: {device.name} with address: {device.address}")
+            async with BleakClient(device) as client:
+                print(f"Connected: {client.is_connected}")
 
-# Connect to the server
-client_sock.connect((server_address, port))
+                while True:
+                    message = input("Enter message to send: ")
+                    if message.lower() == 'exit':
+                        break
+
+                    # Write message to the characteristic
+                    await client.write_gatt_char(CHARACTERISTIC_UUID, message.encode('utf-8'))
+
+                    # Read response from the characteristic
+                    response = await client.read_gatt_char(CHARACTERISTIC_UUID)
+                    print("Received from server:", response.decode('utf-8'))
 
 try:
-    while True:
-        message = input("Enter message to send: ")
-        if message.lower() == 'exit':
-            break
-        client_sock.send(message)
-finally:
-    client_sock.close()
-##############################################################
-
-import bluetooth
-
-# Create a Bluetooth socket
-server_sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-
-# Bind the socket to a port
-server_sock.bind(("", bluetooth.PORT_ANY))
-
-# Start listening for connections
-server_sock.listen(1)
-
-# Get the port that the server is listening on
-port = server_sock.getsockname()[1]
-
-# Advertise the service
-service_id = "00001101-0000-1000-8000-00805F9B34FB"  # UUID for Serial Port Profile (SPP)
-service_name = "blue-wifi-networks"
-service_classes = [service_id, bluetooth.SERIAL_PORT_CLASS]
-profiles = [bluetooth.SERIAL_PORT_PROFILE]
-
-bluetooth.advertise_service(
-    server_sock,
-    service_name,
-    service_id,
-    service_classes,
-    profiles
-)
-
-print(f"Waiting for connection on RFCOMM channel {port}")
-
-# Accept a connection
-client_sock, client_info = server_sock.accept()
-print("Accepted connection from", client_info)
-
-try:
-    while True:
-        data = client_sock.recv(1024)
-        if not data:
-            break
-        print("Received:", data.decode('utf-8'))
-        # Echo the data back to the client
-        client_sock.send(data)
-finally:
-    client_sock.close()
-    server_sock.close()
-
-###############################################################
-
-import bluetooth
-
-# Define the server address and port
-server_address = '00:11:22:33:44:55'  # Replace with the server's Bluetooth address
-port = 1  # Replace with the server's port number (usually 1 for RFCOMM)
-
-# Create a Bluetooth socket
-client_sock = bluetooth.BluetoothSocket(bluetooth.RFCOMM)
-
-# Connect to the server
-client_sock.connect((server_address, port))
-
-try:
-    while True:
-        message = input("Enter message to send: ")
-        if message.lower() == 'exit':
-            break
-        client_sock.send(message)
-        # Receive the response from the server (echoed data)
-        data = client_sock.recv(1024)
-        print("Received from server:", data.decode('utf-8'))
-finally:
-    client_sock.close()
+    asyncio.run(run_client())
+except KeyboardInterrupt:
+    print("Client stopped.")
